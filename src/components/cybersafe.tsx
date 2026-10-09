@@ -1,5 +1,6 @@
 "use client";
-import { ReactNode } from "react";
+import { ReactNode, useRef, useState } from "react";
+import { toBlob } from "html-to-image";
 import {
   ShieldCheck,
   MailWarning,
@@ -11,6 +12,7 @@ import {
   RotateCcw,
   ArrowRight,
   Lock,
+  Share2,
 } from "lucide-react";
 import { PhishQ, Step, remember, resultLevels } from "@/src/components/lib/challenge-data";
 
@@ -131,16 +133,49 @@ export function StoryStep({ step, history }: { step: Step; history: Step[] }) {
 
 export function Results({ score, max, onRestart }: { score: number; max: number; onRestart: () => void }) {
   const level = resultLevels.find((l) => score >= l.min)!;
+  const resultRef = useRef<HTMLElement>(null);
+  const [shareStatus, setShareStatus] = useState("");
+
+  const submitResult = async () => {
+    if (!resultRef.current) return;
+
+    setShareStatus("Preparing your result image...");
+    try {
+      const image = await toBlob(resultRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+      if (!image) throw new Error("Could not create result image");
+
+      const imageUrl = URL.createObjectURL(image);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = imageUrl;
+      downloadLink.download = "cybersafe-result.png";
+      downloadLink.click();
+      window.setTimeout(() => URL.revokeObjectURL(imageUrl), 1000);
+
+      const subject = encodeURIComponent(`CyberSafe Challenge result: ${score} / ${max}`);
+      const body = encodeURIComponent(`My result: ${score} / ${max}\nLevel: ${level.title}\n\nPlease see the attached result image. Attach the downloaded cybersafe-result.png before sending.`);
+      setShareStatus("Result image downloaded. Attach cybersafe-result.png to the email draft before sending.");
+      window.location.href = `mailto:Itsupport@bluemarinaam.com?subject=${subject}&body=${body}`;
+    } catch (error) {
+      setShareStatus(error instanceof Error ? `Could not prepare the result image: ${error.message}` : "Could not prepare the result image. Please try again.");
+    }
+  };
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-14">
-      <h1 className="text-4xl font-bold tracking-tight text-slate-100">Your CyberSafe Score</h1>
-      <p className="mt-6 text-7xl font-bold text-blue-700">{score}<span className="text-3xl text-slate-400"> / {max}</span></p>
-      <p className="mt-3 text-2xl font-semibold text-slate-200">{level.title}</p>
-      <p className="text-slate-400">{level.note}</p>
-      <h2 className="mt-10 text-xl font-semibold text-slate-500">Remember these 5 things</h2>
-      <ol className="mt-3 space-y-2">{remember.map((r, i) => <li key={r} className="flex gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"><b className="text-blue-700">{i + 1}.</b><b className="text-slate-900">{r}</b></li>)}</ol>
-      <p className="mt-10 flex items-center gap-2 text-xl font-bold text-slate-5 00"><Lock className="h-5 w-5 text-blue-400" />Cybersecurity is everyone&apos;s responsibility.</p>
-      <button onClick={onRestart} className={`${btn} mt-6`}><RotateCcw className="h-4 w-4" />Take Challenge Again</button>
+      <section ref={resultRef}>
+        <h1 className="text-4xl font-bold tracking-tight text-slate-100">Your CyberSafe Score</h1>
+        <p className="mt-6 text-7xl font-bold text-blue-700">{score}<span className="text-3xl text-slate-400"> / {max}</span></p>
+        <p className="mt-3 text-2xl font-semibold text-slate-200">{level.title}</p>
+        <p className="text-slate-400">{level.note}</p>
+        <h2 className="mt-10 text-xl font-semibold text-slate-500">Remember these 5 things</h2>
+        <ol className="mt-3 space-y-2">{remember.map((r, i) => <li key={r} className="flex gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"><b className="text-blue-700">{i + 1}.</b><b className="text-slate-900">{r}</b></li>)}</ol>
+        <p className="mt-10 flex items-center gap-2 text-xl font-bold text-slate-5 00"><Lock className="h-5 w-5 text-blue-400" />Cybersecurity is everyone&apos;s responsibility.</p>
+      </section>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <button onClick={submitResult} className={btn}><Share2 className="h-4 w-4" />Share result</button>
+        <button onClick={onRestart} className={btn}><RotateCcw className="h-4 w-4" />Take Challenge Again</button>
+      </div>
+      {shareStatus && <p role="status" className="mt-3 text-sm text-slate-500">{shareStatus}</p>}
     </main>
   );
 }
